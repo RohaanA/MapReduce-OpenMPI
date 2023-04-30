@@ -36,6 +36,7 @@ Designed Specifically for PDC Project.
 #define LOGGING_COLOR_SLAVE ANSI_COLOR_BRIGHT_YELLOW
 #define INFO_COLOR ANSI_COLOR_BLUE
 #define DEBUG_COLOR ANSI_COLOR_MAGENTA
+#define DEBUG_COLOR_TEXT ANSI_COLOR_BRIGHT_MAGENTA
 
 
 /* 
@@ -64,6 +65,22 @@ void raiseError(int rank, char *message) {
     if (rank == MASTER_RANK)
         printf(LOGGING_COLOR_MASTER "[MASTER]: " ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", message);
     else printf(LOGGING_COLOR_SLAVE "[SLAVE]: " ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", message);
+}
+void debug_logger(bool debugMode, int rank, char* message) {
+    if (debugMode){
+        if (rank == -1)
+            printf(DEBUG_COLOR "[DEBUG] -- " DEBUG_COLOR_TEXT "%s \n" ANSI_COLOR_RESET, message);
+        else if (rank == MASTER_RANK)
+            printf(DEBUG_COLOR "[DEBUG] -- " LOGGING_COLOR_MASTER "[MASTER] " DEBUG_COLOR_TEXT "%s \n" ANSI_COLOR_RESET, message);
+        else printf(DEBUG_COLOR "[DEBUG] -- " LOGGING_COLOR_SLAVE "[SLAVE %d] " DEBUG_COLOR_TEXT "%s \n" ANSI_COLOR_RESET, rank, message);
+    }
+}
+void raiseWarning(int rank, char *message) {
+    if (rank == -1)
+        printf(LOGGING_COLOR_MASTER "[WARNING]: " ANSI_COLOR_RESET "%s \n", message);
+    if (rank == MASTER_RANK)
+        printf(LOGGING_COLOR_MASTER "[MASTER]: " ANSI_COLOR_YELLOW "[WARNING]: " ANSI_COLOR_RESET "%s \n", message);
+    else printf(LOGGING_COLOR_SLAVE "[SLAVE]: " ANSI_COLOR_YELLOW "[WARNING]: " ANSI_COLOR_RESET "%s \n", message);
 }
 
 #endif
