@@ -52,7 +52,7 @@ Currently, it is designed to multiply two square matrices.
 
 // #define matrixFile_1 "random_matrix_1.txt"
 // #define matrixFile_2 "random_matrix_2.txt"
-// #define matrixSize 4096
+// #define matrixSize 2
 
 /*
  * MAIN FUNCTION
@@ -84,14 +84,6 @@ int main(int argc, char *argv[]) {
     /////// Description: Used to store hashmap data for each process
     /////// Elements: key, value
     //////////////////////////////////
-        MPI_Datatype MPI_MAPRECEIVE;
-        int block_lengths_2[2] = {10, 50};
-        MPI_Datatype types_2[2] = {MPI_CHAR, MPI_CHAR};
-        MPI_Aint offsets_2[2];
-        offsets_2[0] = offsetof(struct mapReceive, key);
-        offsets_2[1] = offsetof(struct mapReceive, value);
-        MPI_Type_create_struct(2, block_lengths_2, offsets_2, types, &MPI_MAPRECEIVE);
-        MPI_Type_commit(&MPI_MAPRECEIVE);
 
 
     if (rank == MASTER_RANK) {
@@ -145,21 +137,85 @@ int main(int argc, char *argv[]) {
                 int entryCount;
                 //Receive entryCount from mapper
                 MPI_Recv(&entryCount, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                printf("Recieved Entry Count: %d from rank: %d \n", entryCount, mapperRank);
-                //Allocate memory for receiving entries
-                // struct mapReceive *entries = malloc(sizeof(struct mapReceive) * entryCount);
-                // //Receive entries from mapper
-                // MPI_Recv(entries, entryCount, MPI_MAPRECEIVE, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                if (entryCount == 0) //Idle mapper returns 0 entries
+                    continue;
 
-                //Print received entries
-                // for(int i=0; i<entryCount; i++) {
-                //     sprintf(buff, "Received from Mapper %d: %s, %s", mapperRank, entries[i].key, entries[i].value);
-                //     debug_logger(debugMode, rank, buff);
-                // }
+                // printf("Recieved Entry Count: %d from rank: %d \n", entryCount, mapperRank);
+                //Allocate memory for receiving entries
+                struct entry *entries = malloc(sizeof(struct entry) * entryCount);
+                for(int i=0; i<entryCount; i++) {
+                    int keyLength, valueLength;
+                    MPI_Recv(&keyLength, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(&valueLength, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                    entries[i].key = malloc(sizeof(char) * keyLength);
+                    entries[i].value = malloc(sizeof(char) * valueLength);
+
+                    MPI_Recv(entries[i].key, keyLength, MPI_CHAR, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(entries[i].value, valueLength, MPI_CHAR, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                    // printf("Recieved Entry: %s, %s from rank: %d \n", entries[i].key, entries[i].value, mapperRank);
+
+                    //Append to hashmap
+                    hashmap_set_concat(map, entries[i].key, entries[i].value);
+                }
             }
             else raiseError(rank, "Invalid task received");
         }
         
+        logger(rank, "=========================================================================");
+        logger(rank, "                           Finished Map Phase                            ");
+        logger(rank, "=========================================================================");
+        logger(rank, "=========================================================================");
+        logger(rank, "                       Starting Combine/Shuffle Phase                    ");
+        logger(rank, "=========================================================================");
+            printf("\n-- iterate over all entries (rank: %d) --\n", rank);
+            size_t iter = 0;
+            void *item;
+            while (hashmap_iter(map, &iter, &item)) {
+                const struct entry *entryRow = item;
+                printf("key: %s, value: %s\n", entryRow->key, entryRow->value);
+            }
+        logger(rank, "=========================================================================");
+        logger(rank, "                           Finished Combine Phase                        ");
+        logger(rank, "=========================================================================");
+        logger(rank, "=========================================================================");
+        logger(rank, "                           Starting Reduce Phase                         ");
+        logger(rank, "=========================================================================");
+        int totalEntries = (int) hashmap_count(map); int entriesPerReducer;
+        if (size > totalEntries) {
+            logger(rank, "Less data, not all reducers required.");
+            entriesPerReducer = 1;
+        }
+        else entriesPerReducer = totalEntries / (size-1);
+        
+            size_t iter = 0;
+            void *item;
+            int reducerRank = 0; 
+            while (hashmap_iter(map, &iter, &item)) {
+                if (reducerRank == MASTER_RANK) reducerRank++;
+                if (reducerRank == size) break;
+                
+                int task = REDUCE_TASK;
+                const struct entry *entryRow = item;
+                printf("key: %s, value: %s\n", entryRow->key, entryRow->value);
+
+
+                reducerRank++;
+            }
+        for(int mapperRank=0; mapperRank<size; mapperRank++) {
+            if (mapperRank == MASTER_RANK) continue;
+            int task = REDUCE_TASK;
+            announceTask(mapperRank, "assigned", proc_name, "reduce");
+            MPI_Send(&task, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD);
+
+            int load = entriesPerReducer;
+            if (totalEntries < entriesPerReducer)
+                raiseError(rank, "Some error occured in assigning reduce tasks");
+            else totalEntries -= entriesPerReducer;
+
+
+        }
 
     }
     else { //All Slave Processes
@@ -179,7 +235,9 @@ int main(int argc, char *argv[]) {
                 debug_logger(debugMode, rank, buff);
                 if (load < 1) {
                     logger(rank, "Mapper received no load. Idling.");
+                    int entryCount = 0;
                     MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send confirmation that the task has been completed.
+                    MPI_Send(&entryCount, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Tell master entryCount 0 so it can skip.
                     continue;
                 }
                 else {
@@ -240,25 +298,38 @@ int main(int argc, char *argv[]) {
                         }
                     }
                 }
-                printf("\n-- Convert all hashmap entries into mapReceive (rank: %d) --\n", rank);
                 int entryCount = (int) hashmap_count(map);
                 //Create array of mapReceive with entryCount size
-                struct mapReceive* mapReceiveArray = malloc(entryCount * sizeof(struct mapReceive));
-                printf("\n-- iterate over all entries (rank: %d) --\n", rank);
+                struct entry *mapReceiveArray = malloc(entryCount * sizeof(struct entry));
+                // printf("\n-- iterate over all entries (rank: %d) --\n", rank);
                 size_t iter = 0;
+                int iterator = 0;
                 void *item;
                 while (hashmap_iter(map, &iter, &item)) {
                     const struct entry *entryRow = item;
-                    printf("(%d): key: %s, value: %s\n", rank, entryRow->key, entryRow->value);
+                    // printf("(%d): key: %s, value: %s\n", rank, entryRow->key, entryRow->value);
+                    mapReceiveArray[iterator].key = entryRow->key;
+                    mapReceiveArray[iterator].value = entryRow->value;
+                    iterator++;
                 }
                 // /////////////////////////////////////////////////////////////
                 // for(int i=0; i<entryCount; i++) {
-                //     printf("(rank: %d) %s=%s\n", rank, mapReceiveArray[i].key, mapReceiveArray[i].value);
+                //     printf("(%d): key: %s, value: %s\n", rank, mapReceiveArray[i].key, mapReceiveArray[i].value);
                 // }
                 MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send confirmation that the task has been completed.
                 MPI_Send(&entryCount, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send the entryCount to master
-                //Send the mapReceive array to master
-                // MPI_Send(&mapReceiveArray, entryCount, MPI_MAPRECEIVE, MASTER_RANK, 0, MPI_COMM_WORLD);
+                for(int i=0; i<entryCount; i++) {
+                    //First send lengths of key and value
+                    int keyLength = strlen(mapReceiveArray[i].key)+1;
+                    int valueLength = strlen(mapReceiveArray[i].value)+1;
+                    MPI_Send(&keyLength, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD);
+                    MPI_Send(&valueLength, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD);
+                    //Then send the key and value
+                    // printf("Sent Entry %s, %s from rank: %d \n", mapReceiveArray[i].key, mapReceiveArray[i].value, rank);
+                    MPI_Send(mapReceiveArray[i].key, keyLength, MPI_CHAR, MASTER_RANK, 0, MPI_COMM_WORLD);
+                    MPI_Send(mapReceiveArray[i].value, valueLength, MPI_CHAR, MASTER_RANK, 0, MPI_COMM_WORLD);
+                    //Recieved Entry: (0,1), (B,1,1) from rank: 4
+                }
 
                 
             }
