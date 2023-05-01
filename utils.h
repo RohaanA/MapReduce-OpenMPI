@@ -83,4 +83,35 @@ void raiseWarning(int rank, char *message) {
     else printf(LOGGING_COLOR_SLAVE "[SLAVE]: " ANSI_COLOR_YELLOW "[WARNING]: " ANSI_COLOR_RESET "%s \n", message);
 }
 
+
+int** readMatrixLines(char* filename, int startingLine, int N) {
+    FILE* fp = fopen(filename, "r");
+    if (fp == NULL) {
+        printf("Unable to open file.\n");
+        return NULL;
+    }
+
+    int** matrix = (int**) malloc(N * sizeof(int*));
+    for (int i = 0; i < N; i++) {
+        matrix[i] = (int*) malloc(4096 * sizeof(int));
+    }
+
+    char buff[4096*10];  // buffer to store each line
+    int line = 0;
+    while (fgets(buff, sizeof(buff), fp)) {
+        if (line >= startingLine && line < startingLine + N) {
+            char* token = strtok(buff, " ");
+            int col = 0;
+            while (token != NULL) {
+                matrix[line-startingLine][col] = atoi(token);
+                token = strtok(NULL, " ");
+                col++;
+            }
+        }
+        line++;
+    }
+    fclose(fp);
+    return matrix;
+}
+
 #endif

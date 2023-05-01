@@ -1,0 +1,15 @@
+
+proj:581 terminated with signal 11 at PC=7f92272af180 SP=7ffe8fd02e10.  Backtrace:
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x19180)[0x7f92272af180]
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x188a0)[0x7f92272ae8a0]
+/lib64/ld-linux-x86-64.so.2(+0x624e)[0x7f9229c8224e]
+/lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f922748c495]
+/lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f922748c610]
+/lib/x86_64-linux-gnu/libinfinipath.so.4(+0x42a7)[0x7f9226fb92a7]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f9227489520]
+linux-vdso.so.1(clock_gettime+0x19)[0x7ffe8fdb9759]
+/lib/x86_64-linux-gnu/libc.so.6(__clock_gettime+0x1d)[0x7f922752c6dd]
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x4573f)[0x7f92272db73f]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x2158ec4)[0x7f92297c7ec4]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x23fb6d)[0x7f92278aeb6d]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x23fc7f)[0x7f92278aec7f]

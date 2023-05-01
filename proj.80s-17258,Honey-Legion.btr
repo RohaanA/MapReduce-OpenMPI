@@ -1,0 +1,12 @@
+
+proj:17258 terminated with signal 11 at PC=7f09d391dc1d SP=7ffd13022990.  Backtrace:
+/lib/x86_64-linux-gnu/libc.so.6(getenv+0xad)[0x7f09d391dc1d]
+/lib/x86_64-linux-gnu/libpsm2.so.2(+0x6114)[0x7f09d3506114]
+/lib64/ld-linux-x86-64.so.2(+0x624e)[0x7f09d611424e]
+/lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f09d391e495]
+/lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f09d391e610]
+/lib/x86_64-linux-gnu/libinfinipath.so.4(+0x42a7)[0x7f09d344b2a7]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f09d391b520]
+/lib/x86_64-linux-gnu/libc.so.6(pthread_mutex_unlock+0x36)[0x7f09d3972b26]
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x45953)[0x7f09d376d953]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x2158ec4)[0x7f09d5c59ec4]

@@ -1,0 +1,16 @@
+
+proj:17032 terminated with signal 11 at PC=7f22a420ec1d SP=7ffcdcbb8510.  Backtrace:
+/lib/x86_64-linux-gnu/libc.so.6(getenv+0xad)[0x7f22a420ec1d]
+/lib/x86_64-linux-gnu/libpsm2.so.2(+0x6114)[0x7f22a3df7114]
+/lib64/ld-linux-x86-64.so.2(+0x624e)[0x7f22a6a0524e]
+/lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f22a420f495]
+/lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f22a420f610]
+/lib/x86_64-linux-gnu/libinfinipath.so.4(+0x42a7)[0x7f22a3d3c2a7]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f22a420c520]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x23fc81)[0x7f22a4631c81]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x215a7e6)[0x7f22a654c7e6]
+/lib/x86_64-linux-gnu/libmpich.so.12(MPI_Recv+0x4f8)[0x7f22a45044e8]
+./proj(+0x4319)[0x563d7700f319]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x7f22a41f3d90]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7f22a41f3e40]
+./proj(+0x1395)[0x563d7700c395]

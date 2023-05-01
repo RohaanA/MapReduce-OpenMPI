@@ -1,0 +1,7 @@
+
+proj:16763 terminated with signal 11 at PC=7f80d5d22152 SP=7ffe65a35ad8.  Backtrace:
+/lib/x86_64-linux-gnu/libc.so.6(+0x19f152)[0x7f80d5d22152]
+./proj(+0x470c)[0x55e5fe08670c]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x7f80d5bacd90]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7f80d5bace40]
+./proj(+0x1395)[0x55e5fe083395]

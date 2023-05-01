@@ -1,0 +1,9 @@
+
+proj:528 terminated with signal 11 at PC=7f95c285e180 SP=7fffcaffdbd0.  Backtrace:
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x19180)[0x7f95c285e180]
+/lib/x86_64-linux-gnu/libfabric.so.1(+0x188a0)[0x7f95c285d8a0]
+/lib64/ld-linux-x86-64.so.2(+0x624e)[0x7f95c523124e]
+/lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f95c2a3b495]
+/lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f95c2a3b610]
+/lib/x86_64-linux-gnu/libinfinipath.so.4(+0x42a7)[0x7f95c25682a7]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f95c2a38520]

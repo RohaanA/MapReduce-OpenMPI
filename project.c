@@ -34,6 +34,7 @@ Currently, it is designed to multiply two square matrices.
 #include "utils.h"
 #include "hashmap.h"
 #include "hashmap.c"
+#include "mpi_ftns.c"
 
 #define MASTER_RANK 0
 #define debugMode true
@@ -52,126 +53,6 @@ Currently, it is designed to multiply two square matrices.
 // #define matrixFile_1 "random_matrix_1.txt"
 // #define matrixFile_2 "random_matrix_2.txt"
 // #define matrixSize 4096
-
-// Structs used for passing data between processes
-struct mapLoad {
-    int lineStart;
-    int lineEnd;
-};
-struct entry {
-    char* key;
-    char* value;
-};
-
-// Hashmap Functions
-int entry_compare(const void *a, const void *b, void *udata) {
-    const struct entry *ea = a;
-    const struct entry *eb = b;
-    return strcmp(ea->key, eb->key);
-}
-
-void *hashmap_set_concat(struct hashmap *map, const char *key, const char *value) {
-    char delim = '|';
-
-    if (!key) {
-        panic("key is null");
-    }
-    map->oom = false;
-    if (map->count == map->growat) {
-        if (!resize(map, map->nbuckets*2)) {
-            map->oom = true;
-            return NULL;
-        }
-    }
-
-    // Create a temporary entry with the given key and value
-    struct entry temp_entry = { .key = (char *)key, .value = (char *)value };
-    
-    struct bucket *entry = map->edata;
-    entry->hash = get_hash(map, &temp_entry);
-    entry->dib = 1;
-    memcpy(bucket_item(entry), &temp_entry, map->elsize);
-    
-    size_t i = entry->hash & map->mask;
-    for (;;) {
-        struct bucket *bucket = bucket_at(map, i);
-        if (bucket->dib == 0) {
-            memcpy(bucket, entry, map->bucketsz);
-            map->count++;
-            return NULL;
-        }
-        if (entry->hash == bucket->hash && 
-            map->compare(bucket_item(entry), bucket_item(bucket), 
-                         map->udata) == 0)
-        {
-            // Concatenate the new value with the existing value
-            size_t old_value_len = strlen(((struct entry *)bucket_item(bucket))->value);
-            size_t new_value_len = strlen(value);
-            size_t delimiter_len = 1;
-            char *new_value = malloc(old_value_len + delimiter_len + new_value_len + 1);
-            if (!new_value) {
-                map->oom = true;
-                return NULL;
-            }
-            memcpy(new_value, ((struct entry *)bucket_item(bucket))->value, old_value_len);
-            new_value[old_value_len] = delim; // Add a delimiter between old and new values
-            memcpy(new_value + old_value_len + delimiter_len, value, new_value_len);
-            new_value[old_value_len + delimiter_len + new_value_len] = '\0';
-            ((struct entry *)bucket_item(bucket))->value = new_value;
-            return ((struct entry *)bucket_item(bucket))->value;
-        }
-        if (bucket->dib < entry->dib) {
-            memcpy(map->spare, bucket, map->bucketsz);
-            memcpy(bucket, entry, map->bucketsz);
-            memcpy(entry, map->spare, map->bucketsz);
-        }
-        i = (i + 1) & map->mask;
-        entry->dib += 1;
-    }
-}
-
-
-
-bool entry_iter(const void *item, void *udata) {
-    const struct entry *entry = item;
-    printf("%s=%s\n", entry->key, entry->value);
-    return true;
-}
-
-uint64_t entry_hash(const void *item, uint64_t seed0, uint64_t seed1) {
-    const struct entry *entry = item;
-    return hashmap_sip(entry->key, strlen(entry->key), seed0, seed1);
-}
-
-int** readMatrixLines(char* filename, int startingLine, int N) {
-    FILE* fp = fopen(filename, "r");
-    if (fp == NULL) {
-        printf("Unable to open file.\n");
-        return NULL;
-    }
-
-    int** matrix = (int**) malloc(N * sizeof(int*));
-    for (int i = 0; i < N; i++) {
-        matrix[i] = (int*) malloc(4096 * sizeof(int));
-    }
-
-    char buff[4096*10];  // buffer to store each line
-    int line = 0;
-    while (fgets(buff, sizeof(buff), fp)) {
-        if (line >= startingLine && line < startingLine + N) {
-            char* token = strtok(buff, " ");
-            int col = 0;
-            while (token != NULL) {
-                matrix[line-startingLine][col] = atoi(token);
-                token = strtok(NULL, " ");
-                col++;
-            }
-        }
-        line++;
-    }
-    fclose(fp);
-    return matrix;
-}
 
 /*
  * MAIN FUNCTION
@@ -199,9 +80,18 @@ int main(int argc, char *argv[]) {
         MPI_Type_create_struct(2, block_lengths, offsets, types, &mapLoad_mpi_type);
         MPI_Type_commit(&mapLoad_mpi_type);
     //////////////////////////////////
-    /////// MPI Datatype: hashmap_mpi_type
+    /////// MPI Datatype: MPI_MAPRECEIVE
     /////// Description: Used to store hashmap data for each process
-    /////// Elements: 
+    /////// Elements: key, value
+    //////////////////////////////////
+        MPI_Datatype MPI_MAPRECEIVE;
+        int block_lengths_2[2] = {10, 50};
+        MPI_Datatype types_2[2] = {MPI_CHAR, MPI_CHAR};
+        MPI_Aint offsets_2[2];
+        offsets_2[0] = offsetof(struct mapReceive, key);
+        offsets_2[1] = offsetof(struct mapReceive, value);
+        MPI_Type_create_struct(2, block_lengths_2, offsets_2, types, &MPI_MAPRECEIVE);
+        MPI_Type_commit(&MPI_MAPRECEIVE);
 
 
     if (rank == MASTER_RANK) {
@@ -243,19 +133,29 @@ int main(int argc, char *argv[]) {
             startLine += loadPerMapper;
 
             MPI_Send(&task, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD);
-            // MPI_Send(&loadPerMapper, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD);
             MPI_Send(&assignedLoad, 1, mapLoad_mpi_type, mapperRank, 0, MPI_COMM_WORLD);
-            // In the Map phase, each mapper is assigned a block of rows from matrix A and a block of columns from matrix B. 
-            // The mapper multiplies the two blocks and produces a block of the resulting matrix C.
 
         }
         for(int mapperRank=0; mapperRank<size; mapperRank++) {
-            if (mapperRank == MASTER_RANK) continue;
+            if (mapperRank == MASTER_RANK) continue;  int task;
 
-            int task;
             MPI_Recv(&task, 1, MPI_INT, mapperRank, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             if (task == MAP_TASK) {
                 announceCompletion(mapperRank+1, "map");
+                int entryCount;
+                //Receive entryCount from mapper
+                MPI_Recv(&entryCount, 1, MPI_INT, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                printf("Recieved Entry Count: %d from rank: %d \n", entryCount, mapperRank);
+                //Allocate memory for receiving entries
+                // struct mapReceive *entries = malloc(sizeof(struct mapReceive) * entryCount);
+                // //Receive entries from mapper
+                // MPI_Recv(entries, entryCount, MPI_MAPRECEIVE, mapperRank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                //Print received entries
+                // for(int i=0; i<entryCount; i++) {
+                //     sprintf(buff, "Received from Mapper %d: %s, %s", mapperRank, entries[i].key, entries[i].value);
+                //     debug_logger(debugMode, rank, buff);
+                // }
             }
             else raiseError(rank, "Invalid task received");
         }
@@ -279,6 +179,8 @@ int main(int argc, char *argv[]) {
                 debug_logger(debugMode, rank, buff);
                 if (load < 1) {
                     logger(rank, "Mapper received no load. Idling.");
+                    MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send confirmation that the task has been completed.
+                    continue;
                 }
                 else {
                     
@@ -287,55 +189,36 @@ int main(int argc, char *argv[]) {
                         debug_logger(debugMode, rank, "==> I am doing matrix B");
     
                     //First load the matrix lines needed from the file
-                    printf("%d - %d", load, matrixSize);
-                    printf("Loading matrix lines %d to %d\n", received_map_load.lineStart, received_map_load.lineEnd);
+                    // printf("%d - %d", load, matrixSize);
+                    // printf("Loading matrix lines %d to %d\n", received_map_load.lineStart, received_map_load.lineEnd);
                     int** matrix; 
                     if (isMatrixB)
                         matrix = readMatrixLines(matrixFile_2, received_map_load.lineStart-matrixSize, load);
                     else matrix = readMatrixLines(matrixFile_1, received_map_load.lineStart, load);
-
-                //     //Map the matrix to hashmap
-                //     //How mapping works:
-                //     //Matrix A: rows are called i, columns are called j
-                //     //Matrix B: rows are called j, columns are called k
-                //     //Hash map entry are stored as,
-                //     // key: (i,k)
-                //     // value: (A, j, Aij) for Matrix A
-                //     // value: (B, j, Bjk) for Matrix B
-                //     //This is done to make it easier to do the multiplication later
-                //     //Example Hashmap entry for Matrix A:
-                //     // key: (0,0)
-                //     // value: (A, 0, 1)
-                //     // hashmap_set(map, &(struct entry){ .key="key1", .value="value1" });
-                //     // Loop through the matrix and add entries to the hashmap
                     if (isMatrixB) {
                         int row = received_map_load.lineStart - matrixSize;
                         for(int j=0; j<load; j++) {
                             for(int k=0; k<matrixSize; k++) {
                                 for(int i=0; i<matrixSize; i++) {
-                                    char key[10]; char value[10];
+                                    char* key = malloc(10); char* value = malloc(10);
 
                                     // printf("i=%d, j=%d, k=%d\n", i, j, k);
                                     sprintf(key, "(%d,%d)", i, k);
                                     sprintf(value, "(B,%d,%d)", j+row, matrix[j][k]);
                                     // //Write key-value to file
                                     // Define mapFile
-                                    char* mapFileName = malloc(50);
-                                    sprintf(mapFileName, "map_%d.txt", rank);
-                                    FILE* mapFile = fopen(mapFileName, "a");
-                                    fprintf(mapFile, "%s=%s\n", key, value);
-                                    fclose(mapFile);
-                                    printf("(rank: %d) %s=%s\n", rank, key, value);
+                                    // char* mapFileName = malloc(50);
+                                    // sprintf(mapFileName, "map_%d.txt", rank);
+                                    // FILE* mapFile = fopen(mapFileName, "a");
+                                    // fprintf(mapFile, "%s=%s\n", key, value);
+                                    // fclose(mapFile);
+                                    // printf("(rank: %d) %s=%s\n", rank, key, value);
                                     // hashmap_set(map, &(struct entry){ .key=key, .value=value });
-                                    
-                                    // Create a new entry with the key and value
-                                    struct entry* new_entry = malloc(sizeof(struct entry));
-                                    new_entry->key = strdup(key);
-                                    new_entry->value = strdup(value);
-                                    
-                                    // Insert the entry into the hashmap
-                                    // hashmap_set(map, new_entry);
-                                    hashmap_set_concat(map, new_entry->key, new_entry->value);
+
+                                    // hashmap_set_concat(map, new_entry->key, new_entry->value);
+                                    // printf("(rank: %d) %s=%s\n", rank, key, value);
+                                    hashmap_set_concat(map, key, value);
+                                    // hashmap_set(map, &(struct entry){ .key=key, .value=value });
                                 }
                             }
                         }
@@ -344,44 +227,39 @@ int main(int argc, char *argv[]) {
                         for(int i=0; i<load; i++) {
                             for(int j=0; j<matrixSize; j++) {
                                 for(int k=0; k<matrixSize; k++) {
-                                    char key[10];
+                                    char* key = malloc(10); char* value = malloc(10);
                                     sprintf(key, "(%d,%d)", received_map_load.lineStart+i, k);
-                                    char value[10];
                                     sprintf(value, "(A,%d,%d)", j, matrix[i][j]);
-                                    //Print key-value
-                                    // Define mapFile
-                                    char* mapFileName = malloc(50);
-                                    sprintf(mapFileName, "map_%d.txt", rank);
-                                    FILE* mapFile = fopen(mapFileName, "a");
-                                    fprintf(mapFile, "%s=%s\n", key, value);
-                                    fclose(mapFile);
-                                    printf("(rank: %d) %s=%s\n", rank, key, value);
+                                    // printf("(rank: %d) %s=%s\n", rank, new_entry->key, new_entry->value);
+                                    // printf("(rank: %d) %s=%s\n", rank, key, value);
+
+                                    hashmap_set_concat(map, key, value);
                                     // hashmap_set(map, &(struct entry){ .key=key, .value=value });
-                                    
-                                    // Create a new entry with the key and value
-                                    struct entry* new_entry = malloc(sizeof(struct entry));
-                                    new_entry->key = strdup(key);
-                                    new_entry->value = strdup(value);
-                                    
-                                    // Insert the entry into the hashmap
-                                    // hashmap_set(map, new_entry);
-                                    hashmap_set_concat(map, new_entry->key, new_entry->value);
                                 }
                             }
                         }
                     }
-                    printf("\n-- iterate over all entries (rank: %d) --\n", rank);
-                    size_t iter = 0;
-                    void *item;
-                    while (hashmap_iter(map, &iter, &item)) {
-                        const struct entry *entry = item;
-                        printf("%s=%s\n", entry->key, entry->value);
-                    }
-
+                }
+                printf("\n-- Convert all hashmap entries into mapReceive (rank: %d) --\n", rank);
+                int entryCount = (int) hashmap_count(map);
+                //Create array of mapReceive with entryCount size
+                struct mapReceive* mapReceiveArray = malloc(entryCount * sizeof(struct mapReceive));
+                printf("\n-- iterate over all entries (rank: %d) --\n", rank);
+                size_t iter = 0;
+                void *item;
+                while (hashmap_iter(map, &iter, &item)) {
+                    const struct entry *entryRow = item;
+                    printf("(%d): key: %s, value: %s\n", rank, entryRow->key, entryRow->value);
                 }
                 // /////////////////////////////////////////////////////////////
+                // for(int i=0; i<entryCount; i++) {
+                //     printf("(rank: %d) %s=%s\n", rank, mapReceiveArray[i].key, mapReceiveArray[i].value);
+                // }
                 MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send confirmation that the task has been completed.
-                //Send Back the map
+                MPI_Send(&entryCount, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD); // Send the entryCount to master
+                //Send the mapReceive array to master
+                // MPI_Send(&mapReceiveArray, entryCount, MPI_MAPRECEIVE, MASTER_RANK, 0, MPI_COMM_WORLD);
+
                 
             }
             else if (task == REDUCE_TASK) {
