@@ -92,3 +92,76 @@ uint64_t entry_hash(const void *item, uint64_t seed0, uint64_t seed1) {
     const struct entry *entry = item;
     return hashmap_sip(entry->key, strlen(entry->key), seed0, seed1);
 }
+
+char* hashmap_to_json(struct hashmap* map) {
+    size_t mem_size = 1024;
+    char* json = malloc(mem_size);
+    if (json == NULL) {
+        fprintf(stderr, "Failed to allocate memory for JSON string.\n");
+        return NULL;
+    }
+
+    size_t json_size = snprintf(json, mem_size, "{");
+    if (json_size >= mem_size) {
+        mem_size = json_size + 1;
+        char* tmp = realloc(json, mem_size);
+        if (tmp == NULL) {
+            fprintf(stderr, "Failed to reallocate memory for JSON string.\n");
+            free(json);
+            return NULL;
+        }
+        json = tmp;
+    }
+
+    size_t remaining_size = mem_size - json_size;
+    size_t current_pos = json_size;
+
+    size_t iter = 1;
+    void* item;
+    while (hashmap_iter(map, &iter, &item)) {
+        const struct entry* entry_row = item;
+        size_t key_len = strlen(entry_row->key);
+        size_t value_len = strlen(entry_row->value);
+
+        if (current_pos + key_len + value_len + 7 >= mem_size) {
+            mem_size *= 2;
+            char* tmp = realloc(json, mem_size);
+            if (tmp == NULL) {
+                fprintf(stderr, "Failed to reallocate memory for JSON string.\n");
+                free(json);
+                return NULL;
+            }
+            json = tmp;
+            remaining_size = mem_size - current_pos;
+        }
+
+        json_size += snprintf(json + json_size, remaining_size, "\"%s\":\"%s\",", entry_row->key, entry_row->value);
+        remaining_size = mem_size - json_size;
+        current_pos = json_size;
+    }
+
+    json_size--; // Remove the last comma
+    if (current_pos + 2 >= mem_size) {
+        mem_size++;
+        char* tmp = realloc(json, mem_size);
+        if (tmp == NULL) {
+            fprintf(stderr, "Failed to reallocate memory for JSON string.\n");
+            free(json);
+            return NULL;
+        }
+        json = tmp;
+    }
+
+    json_size += snprintf(json + json_size, remaining_size, "}");
+
+    char* tmp = realloc(json, json_size + 1);
+    if (tmp == NULL) {
+        fprintf(stderr, "Failed to reallocate memory for JSON string.\n");
+        free(json);
+        return NULL;
+    }
+    json = tmp;
+    json[json_size] = '\0';
+
+    return json;
+}

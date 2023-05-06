@@ -1,15 +1,52 @@
 import random
 
-n = 2 ** 12  # Set the size of the matrix to 5x5 (you can change this value as desired)
-matrix_count = 2 #Create n random matrices
-
-for i in range(matrix_count):
-    # Create an n x n matrix filled with random integers between 0 and 99
-    matrix = [[random.randint(0, 99) for i in range(n)] for j in range(n)]
-
-    # Save the matrix to a file called "random_matrix_i.txt"
-    with open("random_matrix_" + str(i+1) + ".txt", "w") as f:
-        for row in matrix:
-            for number in row:
-                f.write(str(number) + " ")
-            f.write("\n")
+n = [2, 4, 8, 16, 32]
+#Create 2 nxn matrix and their product for n sizes
+for i in n:
+    #Create matrix A
+    matrixA = []
+    for j in range(i):
+        row = []
+        for k in range(i):
+            row.append(random.randint(0, 10))
+        matrixA.append(row)
+    #Create matrix B
+    matrixB = []
+    for j in range(i):
+        row = []
+        for k in range(i):
+            row.append(random.randint(0, 10))
+        matrixB.append(row)
+    #Create matrix C
+    matrixC = []
+    for j in range(i):
+        row = []
+        for k in range(i):
+            row.append(0)
+        matrixC.append(row)
+    #Matrix multiplication
+    for j in range(i):
+        for k in range(i):
+            for l in range(i):
+                matrixC[j][k] += matrixA[j][l] * matrixB[l][k]
+    #Write matrix A
+    file = open("matrixA" + str(i) + ".txt", "w")
+    for j in range(i):
+        for k in range(i):
+            file.write(str(matrixA[j][k]) + " ")
+        file.write("\n")
+    file.close()
+    #Write matrix B
+    file = open("matrixB" + str(i) + ".txt", "w")
+    for j in range(i):
+        for k in range(i):
+            file.write(str(matrixB[j][k]) + " ")
+        file.write("\n")
+    file.close()
+    #Write matrix C
+    file = open("matrixC" + str(i) + ".txt", "w")
+    for j in range(i):
+        for k in range(i):
+            file.write(str(matrixC[j][k]) + " ")
+        file.write("\n")
+    file.close()

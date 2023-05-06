@@ -29,7 +29,8 @@ Designed Specifically for PDC Project.
 #define ANSI_COLOR_GRAY           "\x1b[90m"
 
 // MESSAGE COLORS
-#define ANNOUNCE_COLOR ANSI_COLOR_CYAN
+#define ANNOUNCE_TASK_ASSIGNED_COLOR ANSI_COLOR_CYAN
+#define ANNOUNCE_TASK_RECEIVED_COLOR ANSI_COLOR_BRIGHT_CYAN
 #define ERROR_COLOR ANSI_COLOR_RED
 #define SUCCESS_COLOR ANSI_COLOR_GREEN
 #define LOGGING_COLOR_MASTER ANSI_COLOR_YELLOW
@@ -47,9 +48,9 @@ Designed Specifically for PDC Project.
  */
 void announceTask(int rank, char *taskType, char *machineName, char* taskName) {
     if (taskType == "assigned")
-        printf(ANNOUNCE_COLOR "[ANNOUNCEMENT]" ANSI_COLOR_RESET " Task %s assigned to process %d \n", taskName, rank);
+        printf(ANNOUNCE_TASK_ASSIGNED_COLOR "[TASK-ASSIGNED]" ANSI_COLOR_RESET " Task %s assigned to process %d \n", taskName, rank);
     else if (taskType == "received")
-        printf(ANNOUNCE_COLOR "[ANNOUNCEMENT]" ANSI_COLOR_RESET " Process %d received task %s on %s \n", rank, taskName, machineName);
+        printf(ANNOUNCE_TASK_RECEIVED_COLOR "[TASK-RECEIVED]" ANSI_COLOR_RESET " Process %d received task %s on %s \n", rank, taskName, machineName);
 }
 void announceCompletion(int rank, char *taskType) {
     printf(SUCCESS_COLOR "[SUCCESS]: " ANSI_COLOR_RESET "Process %d completed task %s \n", rank, taskType);
@@ -64,7 +65,7 @@ void raiseError(int rank, char *message) {
         printf(ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", message);
     if (rank == MASTER_RANK)
         printf(LOGGING_COLOR_MASTER "[MASTER]: " ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", message);
-    else printf(LOGGING_COLOR_SLAVE "[SLAVE]: " ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", message);
+    else printf(LOGGING_COLOR_SLAVE "[SLAVE %d]: " ERROR_COLOR "[ERROR]: " ANSI_COLOR_RESET "%s \n", rank, message);
 }
 void debug_logger(bool debugMode, int rank, char* message) {
     if (debugMode){
