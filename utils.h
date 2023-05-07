@@ -53,7 +53,10 @@ void announceTask(int rank, char *taskType, char *machineName, char* taskName) {
         printf(ANNOUNCE_TASK_RECEIVED_COLOR "[TASK-RECEIVED]" ANSI_COLOR_RESET " Process %d received task %s on %s \n", rank, taskName, machineName);
 }
 void announceCompletion(int rank, char *taskType) {
-    printf(SUCCESS_COLOR "[SUCCESS]: " ANSI_COLOR_RESET "Process %d completed task %s \n", rank, taskType);
+    if (rank == 0){
+        printf(SUCCESS_COLOR "[SUCCESS]: " LOGGING_COLOR_MASTER "[MASTER]:" ANSI_COLOR_BRIGHT_GREEN " %s \n" ANSI_COLOR_RESET, taskType);
+    }
+    else printf(SUCCESS_COLOR "[SUCCESS]: " ANSI_COLOR_RESET "Process %d completed task %s \n", rank, taskType);
 }
 void logger(int rank, char *message) {
     if (rank == MASTER_RANK)

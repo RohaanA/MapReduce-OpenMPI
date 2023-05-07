@@ -1,6 +1,11 @@
 import random
+import os
 
-n = [2, 4, 8, 16, 32]
+n = [4, 8, 16, 32]
+folder = "matrices"
+if not os.path.exists(folder):
+    os.makedirs(folder)
+
 #Create 2 nxn matrix and their product for n sizes
 for i in n:
     #Create matrix A
@@ -8,14 +13,14 @@ for i in n:
     for j in range(i):
         row = []
         for k in range(i):
-            row.append(random.randint(0, 10))
+            row.append(random.randint(0, 9))
         matrixA.append(row)
     #Create matrix B
     matrixB = []
     for j in range(i):
         row = []
         for k in range(i):
-            row.append(random.randint(0, 10))
+            row.append(random.randint(0, 9))
         matrixB.append(row)
     #Create matrix C
     matrixC = []
@@ -30,21 +35,24 @@ for i in n:
             for l in range(i):
                 matrixC[j][k] += matrixA[j][l] * matrixB[l][k]
     #Write matrix A
-    file = open("matrixA" + str(i) + ".txt", "w")
+    file_path = os.path.join(folder, "matrixA_" + str(i) + ".txt")
+    file = open(file_path, "w")
     for j in range(i):
         for k in range(i):
             file.write(str(matrixA[j][k]) + " ")
         file.write("\n")
     file.close()
     #Write matrix B
-    file = open("matrixB" + str(i) + ".txt", "w")
+    file_path = os.path.join(folder, "matrixB_" + str(i) + ".txt")
+    file = open(file_path, "w")
     for j in range(i):
         for k in range(i):
             file.write(str(matrixB[j][k]) + " ")
         file.write("\n")
     file.close()
     #Write matrix C
-    file = open("matrixC" + str(i) + ".txt", "w")
+    file_path = os.path.join(folder, "matrixC_" + str(i) + ".txt")
+    file = open(file_path, "w")
     for j in range(i):
         for k in range(i):
             file.write(str(matrixC[j][k]) + " ")

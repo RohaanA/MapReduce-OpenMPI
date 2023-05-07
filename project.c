@@ -38,6 +38,7 @@ Currently, it is designed to multiply two square matrices.
 
 #define MASTER_RANK 0
 #define debugMode true
+#define SHARED_FOLDER "/home/"
 
 //TASK DICTIONARY
 #define MAP_TASK 1 
@@ -47,17 +48,47 @@ Currently, it is designed to multiply two square matrices.
 #define HASHMAP_DELIM "|" //Delimiter for hashmap entries
 
 // MATRICES
-// #define matrixFile_1 "m1.txt"
-// #define matrixFile_2 "m2.txt"
-// #define matrixSize 2
+#define matrixFile_1 "matrices/matrixA_2.txt"
+#define matrixFile_2 "matrices/matrixB_2.txt"
+#define matrixFileAnswer "matrices/matrixC_2.txt"
+#define matrixSize 2
 
-#define matrixFile_1 "m1_4.txt"
-#define matrixFile_2 "m2_4.txt"
-#define matrixSize 4
-
-// #define matrixFile_1 "random_matrix_1.txt"
-// #define matrixFile_2 "random_matrix_2.txt"
+// #define matrixFile_1 "matrices/matrixA_4.txt"
+// #define matrixFile_2 "matrices/matrixB_4.txt"
+// #define matrixFileAnswer "matrices/matrixC_4.txt"
 // #define matrixSize 4
+
+// #define matrixFile_1 "matrices/matrixA_8.txt"
+// #define matrixFile_2 "matrices/matrixB_8.txt"
+// #define matrixSize 8
+
+// #define matrixFile_1 "matrices/matrixA_16.txt"
+// #define matrixFile_2 "matrices/matrixB_16.txt"
+// #define matrixFileAnswer "matrices/matrixC_16.txt"
+// #define matrixSize 16
+
+bool checkMatrix(int** resultantMatrix) {
+//Read answer matrix
+FILE* fp = fopen(matrixFileAnswer, "r");
+int** answerMatrix = (int**)malloc(matrixSize * sizeof(int*));
+for (int i=0; i<matrixSize; i++) {
+    answerMatrix[i] = (int*)malloc(matrixSize * sizeof(int));
+    for (int j=0; j<matrixSize; j++) {
+        fscanf(fp, "%d", &answerMatrix[i][j]);
+    }
+}
+//Compare with resultant matrix
+for (int i=0; i<matrixSize; i++) {
+    for (int j=0; j<matrixSize; j++) {
+        if (answerMatrix[i][j] != resultantMatrix[i][j]) {
+            debug_logger(debugMode, 0, "Matrix multiplication failed. \n");
+            return false;
+        }
+    }
+}
+debug_logger(debugMode, 0, "Matrix multiplication Successful. \n");
+return true;
+}
 
 /*
  * MAIN FUNCTION
@@ -66,6 +97,7 @@ int main(int argc, char *argv[]) {
     int rank, size;
     char proc_name[100];
     int proc_name_len;
+    MPI_Status status;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -212,14 +244,14 @@ int main(int argc, char *argv[]) {
         MPI_Send(&task, 1, MPI_INT, reducerRank, 0, MPI_COMM_WORLD);
         MPI_Send(&entriesPerReducer, 1, MPI_INT, reducerRank, 0, MPI_COMM_WORLD);
         announceTask(reducerRank, "assigned", proc_name, "reduce");
-        printf("Remaining Entries: %d\n", remainingEntries);
+        // printf("Remaining Entries: %d\n", remainingEntries);
         }
         while(remainingEntries > 0) {
             if (reducerRank == MASTER_RANK) { reducerRank++; continue;}
 
             if (currentEntriesDone != 0) {
                 hashmap_iter(map, &iter, &item);
-                printf("Sending to rank: %d\n", reducerRank);
+                // printf("Sending to rank: %d\n", reducerRank);
                 const struct entry *entryRow = item;
 
                 int keyLength = strlen(entryRow->key)+1;
@@ -240,7 +272,7 @@ int main(int argc, char *argv[]) {
 
                 if (remainingEntries <= 0)
                     break;
-                printf("Remaining Entries: %d\n", remainingEntries);
+                // printf("Remaining Entries: %d\n", remainingEntries);
                 MPI_Send(&task, 1, MPI_INT, reducerRank, 0, MPI_COMM_WORLD);
                 MPI_Send(&entriesPerReducer, 1, MPI_INT, reducerRank, 0, MPI_COMM_WORLD);
                 announceTask(reducerRank, "assigned", proc_name, "reduce");
@@ -248,18 +280,60 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        //Receive sums from reducers
-        for(int i=1; i<size; i++) {
-            //Receive task confirmation
-            int task;
-            MPI_Recv(&task, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            if (task != REDUCE_TASK) raiseError(rank, "Invalid task received");
-            //Receive sum
-            double sum;
-            MPI_Recv(&sum, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("[MASTER]: Sum from rank %d: %f\n", i, sum);
+        hashmap_clear(map, true);
+        //We will receive total N sums from reducers
+        int** resultantMatrix = malloc(sizeof(int*) * matrixSize);
+        for(int i=0; i<matrixSize; i++) {
+            resultantMatrix[i] = malloc(sizeof(int) * matrixSize);
+            for(int j=0; j<matrixSize; j++)
+                resultantMatrix[i][j] = 0;
         }
-
+        for(int i=0; i<totalEntries; i++) {
+            double sum;
+            MPI_Recv(&sum, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            //Receive Key, and store the key-value pair in the hashmap
+            int keyLength; int source = status.MPI_SOURCE;
+            MPI_Recv(&keyLength, 1, MPI_INT, source, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            char *key = malloc(sizeof(char) * keyLength);
+            MPI_Recv(key, keyLength, MPI_CHAR, source, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // printf("[%d][MASTER]: (%s)): %f\n", i+1, key, sum);
+            // Convert (i,j) pair to int and store in resultantMatrix
+            int iRow, jCol;
+            sscanf(key, "%d,%d", &iRow, &jCol);
+            resultantMatrix[iRow][jCol] = sum;
+            // printf("Resultant Matrix[%d][%d] = %f\n", iRow, jCol, sum);
+        }
+        logger(rank, "=========================================================================");
+        logger(rank, "                           Finished Reduce Phase                         ");
+        logger(rank, "=========================================================================");
+        logger(rank, "Matrix Calculation Complete. Forming final matrix into file now.");
+        //Write the final matrix to file
+        FILE *fp = fopen("output.txt", "w");
+        if (fp == NULL) {
+            raiseError(rank, "Error opening file!");
+        }
+        for(int i=0; i<matrixSize; i++){
+            for(int j=0; j<matrixSize; j++) {
+                fprintf(fp, "%d ", resultantMatrix[i][j]);
+            }
+            fprintf(fp, "\n");
+        }
+        fclose(fp);
+        logger(rank, "MATRIX WRITTEN TO FILE: output.txt");
+        logger(rank, "Checking matrix against expected output...");
+        //Check if the matrix is correct
+        if (checkMatrix(resultantMatrix)) {
+            announceCompletion(rank, "Calculated Matrix is correct!");
+        }
+        else {
+            raiseError(rank, "Something went wrong with matrix calculation!");
+        }
+        //Ask all processes to terminate
+        task = EXIT_CALL;
+        for(int i=1; i<size; i++) {
+            MPI_Send(&task, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Recv(&task, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
 
     }
     else { //All Slave Processes
@@ -391,14 +465,15 @@ int main(int argc, char *argv[]) {
                     hashmap_set_concat(map, key, value);
                 }
                 //Perform reduction
-                   printf("\n-- reducer printing received hashmap (rank: %d) --\n", rank);
+                //    printf("\n-- reducer printing received hashmap (rank: %d) --\n", rank);
                    size_t iter = 0;
                    void *item;
                    //Initialize hashmap for reducer
-                     struct hashmap *reducerMap = hashmap_new(sizeof(struct entry), 0, 0, 0, entry_hash, entry_compare, NULL, NULL);
-                     while (hashmap_iter(map, &iter, &item)) {
+            struct hashmap *reducerMap = hashmap_new(sizeof(struct entry), 0, 0, 0, entry_hash, entry_compare, NULL, NULL);
+            while (hashmap_iter(map, &iter, &item)) {
+                        hashmap_clear(reducerMap, true);
                         const struct entry *user = item;
-                        printf("key: %s, value: %s\n", user->key, user->value);
+                        // printf("key: %s, value: %s\n", user->key, user->value);
                         //Split value based on | delimiter
                         char* value = user->value;
                         char* saveptr;
@@ -422,37 +497,43 @@ int main(int argc, char *argv[]) {
                             hashmap_set_concat(reducerMap, jValue, pValue);
                             token = strtok_r(NULL, HASHMAP_DELIM, &saveptr);
                         }
-                    }
                     
-                    printf("\n-- reducer printing reduced hashmap (rank: %d) --\n", rank);
-                    iter = 0; double sum = 0;
-                    while (hashmap_iter(reducerMap, &iter, &item)) {
-                        const struct entry *user = item;
-                        printf("key: %s, value: %s\n", user->key, user->value);
-                        char* token = strtok(user->value, HASHMAP_DELIM);
-                        double product = 1;
-                        while (token != NULL) {
-                            // printf("token: %s\n", token);
-                            product *= atof(token);
-                            token = strtok(NULL, HASHMAP_DELIM);
+                        // printf("\n-- reducer printing reduced hashmap (rank: %d) --\n", rank);
+                        size_t iter2 = 0; double sum = 0; void *item2;
+                        while (hashmap_iter(reducerMap, &iter2, &item2)) {
+                            const struct entry *user = item2;
+                            // printf("key: %s, value: %s\n", user->key, user->value);
+                            char* token = strtok(user->value, HASHMAP_DELIM);
+                            double product = 1;
+                            while (token != NULL) {
+                                // printf("token: %s\n", token);
+                                product *= atof(token);
+                                token = strtok(NULL, HASHMAP_DELIM);
                         }
                         //Replace the current value with the product
-                        char* productString = malloc(100);
+                        char* productString = malloc(10);
                         sprintf(productString, "%f", product);
                         hashmap_set(reducerMap, &(struct entry){ .key=user->key, .value=productString});
                     }
-                    printf("\n-- reducer printing final hashmap (rank: %d) --\n", rank);
-                    iter = 0;
-                    while (hashmap_iter(reducerMap, &iter, &item)) {
-                        const struct entry *user = item;
-                        printf("key: %s, value: %s\n", user->key, user->value);
+                    // printf("\n-- reducer printing final hashmap (rank: %d) --\n", rank);
+                    size_t iter3 = 0; void* item3;
+                    while (hashmap_iter(reducerMap, &iter3, &item3)) {
+                        const struct entry *user = item3;
+                        // printf("key: %s, value: %s\n", user->key, user->value);
                         sum += atof(user->value);
                     }
-                    printf("Sum: %f\n", sum);
+                    // printf("(%s) - %f\n", user->key, sum);
+                    MPI_Send(&sum, 1, MPI_DOUBLE, MASTER_RANK, 0, MPI_COMM_WORLD);
+                    //Also send the key associated with the sum
+                    int keyLength = strlen(user->key) + 1;
+                    MPI_Send(&keyLength, 1, MPI_INT, MASTER_RANK, 1, MPI_COMM_WORLD);
+                    MPI_Send(user->key, keyLength, MPI_CHAR, MASTER_RANK, 2, MPI_COMM_WORLD);
+                    
+                    // hashmap_free(reducerMap);
+            }
                     // We can now send back the sum to the master
                     ////////////////////////////////////////////
-                MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD);
-                MPI_Send(&sum, 1, MPI_DOUBLE, MASTER_RANK, 0, MPI_COMM_WORLD);
+                // MPI_Send(&task, 1, MPI_INT, MASTER_RANK, 0, MPI_COMM_WORLD);
             }
             else if (task == SHUFFLE_TASK) {
                 announceTask(rank, "received", proc_name, "shuffle");
